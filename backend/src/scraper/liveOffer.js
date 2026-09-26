@@ -100,8 +100,9 @@ function extractStockText(rawText) {
 
 async function attemptLivePriceScrape({ productId, productName, selectedOption, config, attempt }) {
   const browser = await chromium.launch({
-    headless: !config.headed,
-    args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    channel: 'chromium',
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
 
   const context = await browser.newContext({
