@@ -99,23 +99,27 @@ function extractStockText(rawText) {
 }
 
 async function attemptLivePriceScrape({ productId, productName, selectedOption, config, attempt }) {
-  const browser = await chromium.launch({
-    channel: 'chromium',
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  });
-
-  const context = await browser.newContext({
-    viewport: { width: 1440, height: 1400 },
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  });
-
-  const page = await context.newPage();
-  page.setDefaultTimeout(config.pageTimeoutMs);
-
-  const startedAt = Date.now();
+  let browser;
+  let context;
+  let page;
 
   try {
+    browser = await chromium.launch({
+      channel: 'chromium',
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+
+    context = await browser.newContext({
+      viewport: { width: 1440, height: 1400 },
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    });
+
+    page = await context.newPage();
+    page.setDefaultTimeout(config.pageTimeoutMs);
+
+    const startedAt = Date.now();
+
     await page.goto(`${STORE_URL}/item/${productId}`, {
       waitUntil: 'domcontentloaded',
       timeout: config.navigationTimeoutMs,
@@ -213,8 +217,17 @@ async function attemptLivePriceScrape({ productId, productName, selectedOption, 
       durationMs: Date.now() - startedAt,
     };
   } finally {
-    await context.close().catch(() => {});
-    await browser.close().catch(() => {});
+    if (page) {
+      await page.close().catch(() => {});
+    }
+
+    if (context) {
+      await context.close().catch(() => {});
+    }
+
+    if (browser) {
+      await browser.close().catch(() => {});
+    }
   }
 }
 
