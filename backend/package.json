@@ -1,0 +1,19 @@
+{
+  "name": "price-tracker-backend",
+  "version": "1.0.0",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "scrape": "node src/scraper/cli.js",
+    "scrape:headed": "node src/scraper/cli.js --headed",
+    "db:migrate": "node src/db/run-migration.js",
+    "db:test": "node src/db/test-db.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "express": "^4.22.3",
+    "pg": "^8.13.0",
+    "playwright": "^1.63.0"
+  }
+}

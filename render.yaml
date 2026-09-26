@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: price-tracker-backend
+    env: node
+    plan: free
+    rootDir: backend
+    buildCommand: |
+      npm install
+      npx playwright install --with-deps chromium
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: SCHEDULER_SECRET
+        sync: false
