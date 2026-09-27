@@ -106,7 +106,7 @@ async function attemptLivePriceScrape({ productId, productName, selectedOption, 
   try {
     browser = await chromium.launch({
       channel: 'chromium',
-      headless: true,
+      headless: !config.headed,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
 

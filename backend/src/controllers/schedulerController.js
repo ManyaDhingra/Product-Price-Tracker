@@ -207,10 +207,9 @@ async function runSchedulerScrape(req, res) {
 
   schedulerState.inProgress = true;
 
-  res.status(202).json({
-    success: true,
-    message: 'Scheduler started',
-  });
+  res.status(202)
+    .type('text/plain')
+    .send('OK');
 
   void executeSchedulerRun();
   return undefined;

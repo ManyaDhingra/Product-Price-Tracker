@@ -215,11 +215,11 @@ test('scheduler endpoint handles empty and multi-product runs', async () => {
       method: 'POST',
       headers: { Authorization: 'Bearer scheduler-secret' },
     });
-    const emptyPayload = await emptyResponse.json();
+    const emptyText = await emptyResponse.text();
 
     assert.equal(emptyResponse.status, 202);
-    assert.equal(emptyPayload.success, true);
-    assert.equal(emptyPayload.message, 'Scheduler started');
+    assert.equal(emptyResponse.headers.get('content-type'), 'text/plain; charset=utf-8');
+    assert.equal(emptyText, 'OK');
 
     await waitForSchedulerReset();
     assert.equal(schedulerController.schedulerState.inProgress, false);
@@ -275,11 +275,11 @@ test('scheduler endpoint handles empty and multi-product runs', async () => {
       method: 'POST',
       headers: { Authorization: 'Bearer scheduler-secret' },
     });
-    const mixedPayload = await mixedResponse.json();
+    const mixedText = await mixedResponse.text();
 
     assert.equal(mixedResponse.status, 202);
-    assert.equal(mixedPayload.success, true);
-    assert.equal(mixedPayload.message, 'Scheduler started');
+    assert.equal(mixedResponse.headers.get('content-type'), 'text/plain; charset=utf-8');
+    assert.equal(mixedText, 'OK');
 
     assert.equal(await waitForSchedulerReset(), true);
     assert.equal(schedulerController.schedulerState.inProgress, false);
@@ -373,11 +373,11 @@ test('scheduler endpoint resets running flag when background work fails', async 
       method: 'POST',
       headers: { Authorization: 'Bearer scheduler-secret' },
     });
-    const payload = await response.json();
+    const text = await response.text();
 
     assert.equal(response.status, 202);
-    assert.equal(payload.success, true);
-    assert.equal(payload.message, 'Scheduler started');
+    assert.equal(response.headers.get('content-type'), 'text/plain; charset=utf-8');
+    assert.equal(text, 'OK');
     assert.equal(await waitForSchedulerReset(), true);
     assert.equal(schedulerController.schedulerState.inProgress, false);
   } finally {
