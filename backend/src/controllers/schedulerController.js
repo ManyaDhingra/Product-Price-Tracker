@@ -121,27 +121,18 @@ async function processTrackedProduct(trackedProduct) {
   return summary;
 }
 
-async function runSchedulerScrape(req, res) {
-  if (schedulerState.inProgress) {
-    return res.status(409).json({
-      success: false,
-      error: 'Scheduler already running. Please wait for the current scrape cycle to finish.',
-    });
-  }
-
-  schedulerState.inProgress = true;
-
+async function executeSchedulerRun() {
   try {
     const activeTrackedProducts = await dbService.listTrackedProducts();
 
     if (!activeTrackedProducts || !activeTrackedProducts.length) {
-      return res.json({
+      return {
         success: true,
         total: 0,
         successful: 0,
         failed: 0,
         results: [],
-      });
+      };
     }
 
     const results = [];
@@ -188,16 +179,41 @@ async function runSchedulerScrape(req, res) {
       }
     }
 
-    return res.json({
+    return {
       success: true,
       total: results.length,
       successful,
       failed,
       results,
-    });
+    };
+  } catch (error) {
+    console.error('Background scheduler run failed:', error);
+    return {
+      success: false,
+      error: error && error.message ? error.message : 'Scheduler failed.',
+    };
   } finally {
     schedulerState.inProgress = false;
   }
+}
+
+async function runSchedulerScrape(req, res) {
+  if (schedulerState.inProgress) {
+    return res.status(409).json({
+      success: false,
+      error: 'Scheduler already running. Please wait for the current scrape cycle to finish.',
+    });
+  }
+
+  schedulerState.inProgress = true;
+
+  res.status(202).json({
+    success: true,
+    message: 'Scheduler started',
+  });
+
+  void executeSchedulerRun();
+  return undefined;
 }
 
 module.exports = {

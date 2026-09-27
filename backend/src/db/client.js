@@ -10,6 +10,12 @@ const pool = databaseUrl
     })
   : null;
 
+if (pool) {
+  pool.on('error', (error) => {
+    console.error('Unexpected PostgreSQL pool error:', error && error.message ? error.message : error);
+  });
+}
+
 function assertDatabaseConfigured() {
   if (!pool) {
     throw new Error('DATABASE_URL is not configured. Add it to the backend .env file before running database migrations or tests.');

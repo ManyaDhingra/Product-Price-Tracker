@@ -4,7 +4,22 @@ const assert = require('node:assert/strict');
 const app = require('../src/app');
 const { pool } = require('../src/db/client');
 const dbService = require('../src/db/service');
+const schedulerController = require('../src/controllers/schedulerController');
 const scraperModule = require('../src/scraper/liveOffer');
+
+async function waitForSchedulerReset(timeoutMs = 2000) {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (!schedulerController.schedulerState.inProgress) {
+      return true;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+
+  return false;
+}
 
 async function startServer() {
   const server = app.listen(0);
@@ -190,35 +205,46 @@ test('scheduler endpoint handles empty and multi-product runs', async () => {
   try {
     process.env.SCHEDULER_SECRET = 'scheduler-secret';
 
-    dbService.listTrackedProducts = async () => [];
+    let emptyRunCount = 0;
+    dbService.listTrackedProducts = async () => {
+      emptyRunCount += 1;
+      return [];
+    };
+
     const emptyResponse = await fetch(`${baseUrl}/api/scheduler/scrape`, {
       method: 'POST',
       headers: { Authorization: 'Bearer scheduler-secret' },
     });
     const emptyPayload = await emptyResponse.json();
 
-    assert.equal(emptyResponse.status, 200);
+    assert.equal(emptyResponse.status, 202);
     assert.equal(emptyPayload.success, true);
-    assert.equal(emptyPayload.total, 0);
-    assert.equal(emptyPayload.successful, 0);
-    assert.equal(emptyPayload.failed, 0);
+    assert.equal(emptyPayload.message, 'Scheduler started');
 
-    dbService.listTrackedProducts = async () => [
-      {
-        id: 101,
-        store_product_id: '2568',
-        product_name: 'Junova Gimbal Nano',
-        selected_option: 'Standard kit',
-        active: true,
-      },
-      {
-        id: 102,
-        store_product_id: '2008',
-        product_name: 'Junova Gimbal One',
-        selected_option: 'Standard kit',
-        active: true,
-      },
-    ];
+    await waitForSchedulerReset();
+    assert.equal(schedulerController.schedulerState.inProgress, false);
+    assert.equal(emptyRunCount, 1);
+
+    let runCount = 0;
+    dbService.listTrackedProducts = async () => {
+      runCount += 1;
+      return [
+        {
+          id: 101,
+          store_product_id: '2568',
+          product_name: 'Junova Gimbal Nano',
+          selected_option: 'Standard kit',
+          active: true,
+        },
+        {
+          id: 102,
+          store_product_id: '2008',
+          product_name: 'Junova Gimbal One',
+          selected_option: 'Standard kit',
+          active: true,
+        },
+      ];
+    };
 
     scraperModule.scrapeLiveOffer = async ({ productId }) => {
       if (productId === '2568') {
@@ -251,15 +277,13 @@ test('scheduler endpoint handles empty and multi-product runs', async () => {
     });
     const mixedPayload = await mixedResponse.json();
 
-    assert.equal(mixedResponse.status, 200);
+    assert.equal(mixedResponse.status, 202);
     assert.equal(mixedPayload.success, true);
-    assert.equal(mixedPayload.total, 2);
-    assert.equal(mixedPayload.successful, 1);
-    assert.equal(mixedPayload.failed, 1);
-    assert.equal(mixedPayload.results[0].outcome, 'success');
-    assert.equal(mixedPayload.results[1].outcome, 'failed');
-    assert.equal(mixedPayload.results[1].price, null);
-    assert.equal(mixedPayload.results[1].stock, null);
+    assert.equal(mixedPayload.message, 'Scheduler started');
+
+    assert.equal(await waitForSchedulerReset(), true);
+    assert.equal(schedulerController.schedulerState.inProgress, false);
+    assert.equal(runCount, 1);
   } finally {
     dbService.listTrackedProducts = originalListTrackedProducts;
     scraperModule.scrapeLiveOffer = originalScrapeLiveOffer;
@@ -317,11 +341,47 @@ test('scheduler endpoint blocks overlapping runs', async () => {
 
     const [firstResponse, secondResponse] = await Promise.all([firstRequest, secondRequest]);
 
-    assert.equal(firstResponse.status, 200);
+    assert.equal(firstResponse.status, 202);
     assert.equal(secondResponse.status, 409);
+    assert.equal(await waitForSchedulerReset(), true);
+    assert.equal(schedulerController.schedulerState.inProgress, false);
   } finally {
     dbService.listTrackedProducts = originalListTrackedProducts;
     scraperModule.scrapeLiveOffer = originalScrapeLiveOffer;
+    if (originalSecret === undefined) {
+      delete process.env.SCHEDULER_SECRET;
+    } else {
+      process.env.SCHEDULER_SECRET = originalSecret;
+    }
+    await closeServer(server);
+  }
+});
+
+test('scheduler endpoint resets running flag when background work fails', async () => {
+  const server = await startServer();
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const originalSecret = process.env.SCHEDULER_SECRET;
+  const originalListTrackedProducts = dbService.listTrackedProducts;
+
+  try {
+    process.env.SCHEDULER_SECRET = 'scheduler-secret';
+    dbService.listTrackedProducts = async () => {
+      throw new Error('DB unavailable in background job');
+    };
+
+    const response = await fetch(`${baseUrl}/api/scheduler/scrape`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer scheduler-secret' },
+    });
+    const payload = await response.json();
+
+    assert.equal(response.status, 202);
+    assert.equal(payload.success, true);
+    assert.equal(payload.message, 'Scheduler started');
+    assert.equal(await waitForSchedulerReset(), true);
+    assert.equal(schedulerController.schedulerState.inProgress, false);
+  } finally {
+    dbService.listTrackedProducts = originalListTrackedProducts;
     if (originalSecret === undefined) {
       delete process.env.SCHEDULER_SECRET;
     } else {
